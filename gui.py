@@ -17,7 +17,7 @@ class Ui_Form(object):
         Form.setObjectName("Form")
         Form.resize(400, 605)
         Form.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.FramelessWindowHint)
-        Form.setWindowOpacity(0.5)  # Start with 50% transparency
+        # Form.setWindowOpacity(0.5)  # Start with 50% transparency
         self.Form = Form
 
         # Central widget and layout
@@ -94,10 +94,13 @@ class Ui_Form(object):
         try:
             clipboard = QtWidgets.QApplication.clipboard()
             mime_data = clipboard.mimeData()
-            if mime_data.hasText():
+            
+            if mime_data.hasUrls():
+                urls = mime_data.urls()
+                if urls:
+                    content = urls[0].toLocalFile()  # Get the full local file path
+            elif mime_data.hasText():
                 content = clipboard.text()
-            elif mime_data.hasUrls():
-                content = mime_data.urls()[0].toLocalFile()  # Handle files
             else:
                 return  # Ignore unsupported data
 
@@ -110,12 +113,13 @@ class Ui_Form(object):
             print(f"Error accessing clipboard: {e}")
 
     def log_clipboard(self, content):
-        with open(self.log_file, "r+") as file:
-            logs = file.read()
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            new_log = f"[{timestamp}] {content}\n"
-            file.seek(0)
-            file.write(new_log + logs)
+        try:
+            with open(self.log_file, "a", encoding='utf-8') as file:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                log_entry = f"[{timestamp}] {content}\n"
+                file.write(log_entry)
+        except Exception as e:
+            print(f"Error writing to log file: {e}")
 
     def update_ui(self):
         # Update all text browsers based on clipboard history
@@ -146,20 +150,25 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         _translate = QtCore.QCoreApplication.translate
         Form.setWindowTitle(_translate("Form", "ClipAway"))
-        self.label.setText(_translate("Form", "Clipboard History"))
+        self.label.setText(_translate("Form", "ClipAway- Clipboard History"))
 
 
 class MainForm(QtWidgets.QWidget, Ui_Form):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
+        self.setWindowOpacity(0.5)
 
     def mouseMoveEvent(self, event):
         self.setWindowOpacity(1.0)  # Full opacity on hover
         super().mouseMoveEvent(event)
+    
+    def enterEvent(self, event):
+        self.setWindowOpacity(1.0)  # Set opacity to 100% when mouse enters
+        super().enterEvent(event)
 
     def leaveEvent(self, event):
-        self.setWindowOpacity(0.5)  # 50% opacity when not hovered
+        self.setWindowOpacity(0.5)  # Set opacity back to 50% when mouse leaves
         super().leaveEvent(event)
 
     def mousePressEvent(self, event):
