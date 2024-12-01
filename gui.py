@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-import pyperclip
 from collections import deque
 from datetime import datetime
 import os
+import subprocess
 
 
 class Ui_Form(object):
@@ -30,6 +30,7 @@ class Ui_Form(object):
 
         # Header with controls
         self.header_layout = QtWidgets.QHBoxLayout()
+
         self.lock_button = QtWidgets.QPushButton("Lock", self.verticalLayoutWidget)
         self.lock_button.setObjectName("lock_button")
         self.lock_button.clicked.connect(self.toggle_lock_position)
@@ -42,9 +43,14 @@ class Ui_Form(object):
         self.close_button.setObjectName("close_button")
         self.close_button.clicked.connect(self.close_application)
 
+        self.open_log_button = QtWidgets.QPushButton("Open Log", self.verticalLayoutWidget)
+        self.open_log_button.setObjectName("open_log_button")
+        self.open_log_button.clicked.connect(self.open_log_file)
+
         self.header_layout.addWidget(self.lock_button)
         self.header_layout.addWidget(self.minimize_button)
         self.header_layout.addWidget(self.close_button)
+        self.header_layout.addWidget(self.open_log_button)
         self.verticalLayout.addLayout(self.header_layout)
 
         # Label for title
@@ -70,6 +76,10 @@ class Ui_Form(object):
         self.text_browsers = []
         self.initialize_text_browsers()
 
+        # Hover event filters
+        Form.setAttribute(QtCore.Qt.WA_Hover)
+        Form.setMouseTracking(True)
+
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
 
@@ -86,25 +96,29 @@ class Ui_Form(object):
             mime_data = clipboard.mimeData()
             if mime_data.hasText():
                 content = clipboard.text()
-                if not self.clipboard_history or self.clipboard_history[-1] != content:
-                    self.clipboard_history.append(content)
-                    self.log_clipboard(content)
-                    self.update_text_browsers()
             elif mime_data.hasUrls():
-                file_paths = [url.toLocalFile() for url in mime_data.urls()]
-                for path in file_paths:
-                    self.clipboard_history.append(path)
-                    self.log_clipboard(path)
-                    self.update_text_browsers()
+                content = mime_data.urls()[0].toLocalFile()  # Handle files
+            else:
+                return  # Ignore unsupported data
+
+            # Avoid duplicates
+            if not self.clipboard_history or self.clipboard_history[0] != content:
+                self.clipboard_history.appendleft(content)
+                self.log_clipboard(content)
+                self.update_ui()
         except Exception as e:
             print(f"Error accessing clipboard: {e}")
 
     def log_clipboard(self, content):
-        with open(self.log_file, "a") as file:
+        with open(self.log_file, "r+") as file:
+            logs = file.read()
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            file.write(f"[{timestamp}] {content}\n")
+            new_log = f"[{timestamp}] {content}\n"
+            file.seek(0)
+            file.write(new_log + logs)
 
-    def update_text_browsers(self):
+    def update_ui(self):
+        # Update all text browsers based on clipboard history
         for i, text_browser in enumerate(self.text_browsers):
             if i < len(self.clipboard_history):
                 text_browser.setText(self.clipboard_history[i])
@@ -121,6 +135,14 @@ class Ui_Form(object):
     def close_application(self):
         QtWidgets.QApplication.quit()
 
+    def open_log_file(self):
+        if os.name == "posix":
+            subprocess.call(["open", self.log_file])  # macOS
+        elif os.name == "nt":
+            os.startfile(self.log_file)  # Windows
+        else:
+            subprocess.call(["xdg-open", self.log_file])  # Linux
+
     def retranslateUi(self, Form):
         _translate = QtCore.QCoreApplication.translate
         Form.setWindowTitle(_translate("Form", "ClipAway"))
@@ -132,6 +154,14 @@ class MainForm(QtWidgets.QWidget, Ui_Form):
         super().__init__()
         self.setupUi(self)
 
+    def mouseMoveEvent(self, event):
+        self.setWindowOpacity(1.0)  # Full opacity on hover
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event):
+        self.setWindowOpacity(0.5)  # 50% opacity when not hovered
+        super().leaveEvent(event)
+
     def mousePressEvent(self, event):
         if not self.position_locked and event.button() == QtCore.Qt.LeftButton:
             self.drag_pos = event.globalPos() - self.frameGeometry().topLeft()
@@ -139,13 +169,6 @@ class MainForm(QtWidgets.QWidget, Ui_Form):
     def mouseMoveEvent(self, event):
         if not self.position_locked and event.buttons() == QtCore.Qt.LeftButton:
             self.move(event.globalPos() - self.drag_pos)
-
-    def eventFilter(self, obj, event):
-        if event.type() == QtCore.QEvent.Enter:
-            self.setWindowOpacity(1.0)  # Full opacity on hover
-        elif event.type() == QtCore.QEvent.Leave:
-            self.setWindowOpacity(0.5)  # 50% opacity when not hovered
-        return super().eventFilter(obj, event)
 
 
 if __name__ == "__main__":
