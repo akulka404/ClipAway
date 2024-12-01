@@ -114,10 +114,19 @@ class Ui_Form(object):
 
     def log_clipboard(self, content):
         try:
-            with open(self.log_file, "a", encoding='utf-8') as file:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log_entry = f"[{timestamp}] {content}\n"
-                file.write(log_entry)
+            # Read existing content
+            existing_content = ""
+            if os.path.exists(self.log_file):
+                with open(self.log_file, "r", encoding='utf-8') as file:
+                    existing_content = file.read()
+            
+            # Prepend new entry
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            new_entry = f"[{timestamp}] {content}\n"
+            
+            # Write updated content
+            with open(self.log_file, "w", encoding='utf-8') as file:
+                file.write(new_entry + existing_content)
         except Exception as e:
             print(f"Error writing to log file: {e}")
 
@@ -157,7 +166,7 @@ class MainForm(QtWidgets.QWidget, Ui_Form):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
-        self.setWindowOpacity(0.5)
+        self.setWindowOpacity(0.25)
 
     def mouseMoveEvent(self, event):
         self.setWindowOpacity(1.0)  # Full opacity on hover
@@ -168,7 +177,7 @@ class MainForm(QtWidgets.QWidget, Ui_Form):
         super().enterEvent(event)
 
     def leaveEvent(self, event):
-        self.setWindowOpacity(0.5)  # Set opacity back to 50% when mouse leaves
+        self.setWindowOpacity(0.25)  # Set opacity back to 50% when mouse leaves
         super().leaveEvent(event)
 
     def mousePressEvent(self, event):
